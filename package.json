@@ -1,0 +1,24 @@
+{
+    "name": "mini-vue-ms",
+    "version": "1.0.0",
+    "description": "",
+    "main": "lib/sb.cjs.js",
+    "module": "lib/sb.esm.js",
+    "scripts": {
+        "test": "vitest",
+        "build": "rollup -c rollup.config.js"
+    },
+    "type": "module",
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@rollup/plugin-typescript": "^11.1.6",
+        "rollup": "^4.17.2",
+        "typescript": "^5.4.5",
+        "vitest": "^1.6.0"
+    },
+    "dependencies": {
+        "tslib": "^2.6.2"
+    }
+}

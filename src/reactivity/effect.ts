@@ -1,6 +1,6 @@
 export interface EffectRunner<T = any> {
-    (): T,
-    effect?: ReactiveEffect
+    (): T;
+    effect?: ReactiveEffect;
 }
 
 export interface EffectOptions {
@@ -9,31 +9,32 @@ export interface EffectOptions {
     onStop?: () => void;
 }
 
-
 const targetMap = new WeakMap<object, Map<string | symbol, Set<ReactiveEffect>>>();
-let activeEffect: ReactiveEffect | undefined = void 0;
+let activeEffect: ReactiveEffect | undefined = undefined;
 const effectStack: ReactiveEffect[] = [];
 
 export class ReactiveEffect<T = any> {
     private _fn: EffectRunner<T>;
-    public scheduler: any;
+    public scheduler?: (f: EffectRunner) => void;
     public active: boolean = true;
-    deps: Set<ReactiveEffect>[] = [];
-    onStop = () => { };
+    public deps: Set<ReactiveEffect>[] = [];
+    public onStop?: () => void;
+
     constructor(fn: EffectRunner<T>, scheduler?: (f: EffectRunner) => void, onStop?: () => void) {
         this._fn = fn;
         this.scheduler = scheduler;
-        if (onStop) this.onStop = onStop;
+        this.onStop = onStop;
     }
 
     public run() {
         if (!this.active) return this._fn();
+        if (effectStack.includes(this)) return; // 防止递归调用导致死循环
+
         activeEffect = this;
         effectStack.push(this);
         try {
             cleanupEffect(this);
-            const res = this._fn();
-            return res;
+            return this._fn();
         } finally {
             effectStack.pop();
             activeEffect = effectStack[effectStack.length - 1];
@@ -41,24 +42,23 @@ export class ReactiveEffect<T = any> {
     }
 
     public stop() {
-        cleanupEffect(this);
-        this.active = false;
-        this.onStop();
-
+        if (this.active) {
+            cleanupEffect(this);
+            this.active = false;
+            if (this.onStop) this.onStop();
+        }
     }
 }
 
-export function cleanupEffect(effect: ReactiveEffect) {
-    effect.deps.forEach(dep => {
-        dep.delete(effect);
-    });
+function cleanupEffect(effect: ReactiveEffect) {
+    effect.deps.forEach(dep => dep.delete(effect));
     effect.deps.length = 0;
 }
 
 export function effect<T = any>(
     fn: EffectRunner<T>,
-    options: EffectOptions = {},
-) {
+    options: EffectOptions = {}
+): EffectRunner {
     const _effect = new ReactiveEffect(fn, options.scheduler, options.onStop);
     if (!options.lazy) {
         _effect.run();
@@ -95,17 +95,21 @@ export function trigger(target: object, key: string | symbol) {
 
     const effects = depsMap.get(key);
     if (effects) {
-        effects.forEach(effect => {
+        const effectsToRun = new Set(effects);
+        effectsToRun.forEach(effect => {
             if (effect !== activeEffect) {
-                effect.scheduler ?
-                    effect.scheduler(effect.run) :
+                if (effect.scheduler) {
+                    effect.scheduler(effect.run.bind(effect));
+                } else {
                     effect.run();
+                }
             }
         });
     }
 }
 
 export function stop(runner: EffectRunner) {
-    runner.effect && runner.effect.stop();
-
+    if (runner.effect) {
+        runner.effect.stop();
+    }
 }
